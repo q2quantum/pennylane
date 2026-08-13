@@ -942,7 +942,7 @@ def _equal_measurements(
     """Determine whether two MeasurementProcess objects are equal"""
 
     if op1.obs is not None and op2.obs is not None:
-        return equal(
+        obs_result = _equal(
             op1.obs,
             op2.obs,
             check_interface=check_interface,
@@ -950,35 +950,70 @@ def _equal_measurements(
             rtol=rtol,
             atol=atol,
         )
+        if isinstance(obs_result, str):
+            return (
+                f"{op1} and {op2} are not equal because their observables are "
+                f"not equal because {obs_result}"
+            )
+        if not obs_result:
+            return f"{op1} and {op2} are not equal because their observables are not equal."
+        return True
 
     if op1.mv is not None and op2.mv is not None:
         if isinstance(op1.mv, MeasurementValue) and isinstance(op2.mv, MeasurementValue):
-            return qp.equal(op1.mv, op2.mv)
+            if qp.equal(op1.mv, op2.mv):
+                return True
+            return (
+                f"{op1} and {op2} are not equal because their measurement " f"values are not equal."
+            )
 
         if math.is_abstract(op1.mv) or math.is_abstract(op2.mv):
-            return op1.mv is op2.mv
+            if op1.mv is op2.mv:
+                return True
+            return (
+                f"{op1} and {op2} are not equal because their (abstract) "
+                f"measurement values are not the same object."
+            )
 
         if isinstance(op1.mv, Iterable) and isinstance(op2.mv, Iterable):
             if len(op1.mv) == len(op2.mv):
-                return all(
+                if all(
                     mv1.measurements == mv2.measurements
                     for mv1, mv2 in zip(op1.mv, op2.mv, strict=True)
+                ):
+                    return True
+                return (
+                    f"{op1} and {op2} are not equal because their measurement "
+                    f"value lists reference different measurements."
                 )
 
-        return False
+        return f"{op1} and {op2} are not equal because their measurement values are not comparable."
 
     if op1.wires != op2.wires:
-        return False
+        return (
+            f"{op1} and {op2} are not equal because they act on different "
+            f"wires. Got {op1.wires} and {op2.wires}."
+        )
 
     if op1.obs is None and op2.obs is None:
         # only compare eigvals if both observables are None.
         # Can be expensive to compute for large observables
         if op1.eigvals() is not None and op2.eigvals() is not None:
-            return math.allclose(op1.eigvals(), op2.eigvals(), rtol=rtol, atol=atol)
+            if math.allclose(op1.eigvals(), op2.eigvals(), rtol=rtol, atol=atol):
+                return True
+            return f"{op1} and {op2} are not equal because they have different eigenvalues."
 
-        return op1.eigvals() is None and op2.eigvals() is None
+        if op1.eigvals() is None and op2.eigvals() is None:
+            return True
+        return (
+            f"{op1} and {op2} are not equal because one has eigenvalues set "
+            f"and the other does not."
+        )
 
-    return False
+    return (
+        f"{op1} and {op2} are not equal because one has an observable set "
+        f"and the other does not."
+    )
 
 
 @_equal_dispatch.register
@@ -1008,16 +1043,32 @@ def _equal_pauli_measure(op1: PauliMeasure, op2: PauliMeasure, **_):
 def _(op1: VnEntropyMP, op2: VnEntropyMP, **kwargs):
     """Determine whether two MeasurementProcess objects are equal"""
     eq_m = _equal_measurements(op1, op2, **kwargs)
-    log_base_match = op1.log_base == op2.log_base
-    return eq_m and log_base_match
+    if isinstance(eq_m, str):
+        return eq_m
+    if not eq_m:
+        return f"{op1} and {op2} are not equal."
+    if op1.log_base != op2.log_base:
+        return (
+            f"{op1} and {op2} are not equal because they have different "
+            f"log_base. Got {op1.log_base} and {op2.log_base}."
+        )
+    return True
 
 
 @_equal_dispatch.register
 def _(op1: MutualInfoMP, op2: MutualInfoMP, **kwargs):
     """Determine whether two MeasurementProcess objects are equal"""
     eq_m = _equal_measurements(op1, op2, **kwargs)
-    log_base_match = op1.log_base == op2.log_base
-    return eq_m and log_base_match
+    if isinstance(eq_m, str):
+        return eq_m
+    if not eq_m:
+        return f"{op1} and {op2} are not equal."
+    if op1.log_base != op2.log_base:
+        return (
+            f"{op1} and {op2} are not equal because they have different "
+            f"log_base. Got {op1.log_base} and {op2.log_base}."
+        )
+    return True
 
 
 @_equal_dispatch.register
@@ -1042,7 +1093,17 @@ def _equal_shadow_measurements(op1: ShadowExpvalMP, op2: ShadowExpvalMP, **_):
 
 @_equal_dispatch.register
 def _equal_counts(op1: CountsMP, op2: CountsMP, **kwargs):
-    return _equal_measurements(op1, op2, **kwargs) and op1.all_outcomes == op2.all_outcomes
+    eq_m = _equal_measurements(op1, op2, **kwargs)
+    if isinstance(eq_m, str):
+        return eq_m
+    if not eq_m:
+        return f"{op1} and {op2} are not equal."
+    if op1.all_outcomes != op2.all_outcomes:
+        return (
+            f"{op1} and {op2} are not equal because they have different "
+            f"all_outcomes. Got {op1.all_outcomes} and {op2.all_outcomes}."
+        )
+    return True
 
 
 @_equal_dispatch.register
