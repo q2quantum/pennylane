@@ -1677,6 +1677,45 @@ class TestMeasurementsEqual:
         o2 = qp.prod(z0, x1)
         assert qp.equal(qp.expval(o1), qp.expval(o2)) is True
 
+    def test_assert_equal_measurements_different_observable_types_gives_reason(self):
+        """assert_equal on two measurements over different observable types must
+        chain the underlying reason, not just say "not equal for an unspecified
+        reason" (the bug reported in #7354)."""
+        with pytest.raises(
+            AssertionError,
+            match=(
+                r"are not equal because their observables are not equal because "
+                r"op1 and op2 are of different types"
+            ),
+        ):
+            assert_equal(qp.expval(qp.Z(0)), qp.expval(qp.X(0)))
+
+    def test_assert_equal_measurements_different_wires_gives_reason(self):
+        """assert_equal on two measurements with no observable but different
+        wires must say so, not give an unspecified-reason message."""
+        mp1 = ProbabilityMP(wires=Wires([0]))
+        mp2 = ProbabilityMP(wires=Wires([1]))
+        with pytest.raises(
+            AssertionError, match=r"are not equal because they act on different wires"
+        ):
+            assert_equal(mp1, mp2)
+
+    def test_assert_equal_measurements_different_eigvals_gives_reason(self):
+        """assert_equal on two measurements with no observable but different
+        eigenvalues must say so, not give an unspecified-reason message."""
+        mp1 = ProbabilityMP(eigvals=(1, -1), wires=Wires([0]))
+        mp2 = ProbabilityMP(eigvals=(1, 1), wires=Wires([0]))
+        with pytest.raises(
+            AssertionError, match=r"are not equal because they have different eigenvalues"
+        ):
+            assert_equal(mp1, mp2)
+
+    def test_equal_still_returns_plain_bool_not_string(self):
+        """The public equal() must keep returning a bare bool on mismatch, even
+        though the internal dispatch now returns an informative string."""
+        result = qp.equal(qp.expval(qp.Z(0)), qp.expval(qp.X(0)))
+        assert result is False
+
     def test_mid_measure(self):
         """Test that `MidMeasure`s are equal only if their wires
         an id are equal and their `reset` attribute match."""
